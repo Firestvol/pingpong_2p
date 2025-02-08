@@ -119,7 +119,7 @@
         // Присоединение к комнате
         async function joinRoom(roomId) {
             try {
-                client = new colyseus.Client("wss://pingpong2p-production.up.railway.app/");
+                client = new colyseus.Client("wss://pingpong2p-production.up.railway.app"); // Замените на ваш URL
                 room = await client.joinById(roomId);
 
                 document.getElementById("room-list").style.display = "none";
