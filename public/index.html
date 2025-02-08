@@ -1,0 +1,161 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Пинг-Понг</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        input, button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            margin: 10px;
+            padding: 10px;
+            background-color: #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Пинг-Понг</h1>
+
+    <!-- Форма для ввода ника -->
+    <div id="auth-form">
+        <input type="text" id="username" placeholder="Введите ваш ник">
+        <button onclick="login()">Войти</button>
+    </div>
+
+    <!-- Список комнат -->
+    <div id="room-list" style="display: none;">
+        <h2>Список комнат</h2>
+        <ul id="rooms"></ul>
+        <button onclick="createRoom()">Создать комнату</button>
+    </div>
+
+    <!-- Игровое поле -->
+    <div id="game" style="display: none;">
+        <canvas id="pongCanvas" width="600" height="400"></canvas>
+    </div>
+
+    <script src="https://cdn.colyseus.io/client/latest/colyseus.js"></script>
+    <script>
+        let client, room, username;
+
+        // Вход в систему
+        function login() {
+            username = document.getElementById("username").value.trim();
+            if (!username) {
+                alert("Введите ник!");
+                return;
+            }
+
+            fetch("/api/rooms")
+                .then(res => res.json())
+                .then(data => renderRooms(data))
+                .catch(err => console.error(err));
+
+            document.getElementById("auth-form").style.display = "none";
+            document.getElementById("room-list").style.display = "block";
+        }
+
+        // Рендер списка комнат
+        function renderRooms(rooms) {
+            const roomList = document.getElementById("rooms");
+            roomList.innerHTML = "";
+
+            rooms.forEach(room => {
+                const li = document.createElement("li");
+                li.textContent = `Комната ${room.id} (${room.players}/2)`;
+                li.onclick = () => joinRoom(room.id);
+                roomList.appendChild(li);
+            });
+        }
+
+        // Создание новой комнаты
+        async function createRoom() {
+            const res = await fetch("/api/create-room", { method: "POST" });
+            const data = await res.json();
+            joinRoom(data.roomId);
+        }
+
+        // Присоединение к комнате
+        async function joinRoom(roomId) {
+            try {
+                client = new colyseus.Client("wss://pingpong_2p.railway.internal");
+                room = await client.joinById(roomId);
+
+                document.getElementById("room-list").style.display = "none";
+                document.getElementById("game").style.display = "block";
+
+                room.onStateChange.once((state) => startGame(state));
+            } catch (e) {
+                alert("Не удалось присоединиться к комнате.");
+                console.error(e);
+            }
+        }
+
+        // Начало игры
+        function startGame(state) {
+            const canvas = document.getElementById("pongCanvas");
+            const ctx = canvas.getContext("2d");
+
+            setInterval(() => {
+                draw(state);
+            }, 16);
+
+            window.addEventListener("mousemove", (e) => {
+                const mouseY = (e.clientY / window.innerHeight) * 2 - 1;
+                room.send({ type: "move", y: mouseY });
+            });
+        }
+
+        // Отрисовка игры
+        function draw(state) {
+            const scale = 300;
+
+            const ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "white";
+            ctx.beginPath();
+            ctx.arc(
+                (state.ball.x + 1) * scale + canvas.width / 2,
+                (-state.ball.y + 1) * scale,
+                5,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+
+            ctx.fillStyle = "red";
+            ctx.fillRect(
+                (state.paddle1.x + 1) * scale + canvas.width / 2 - 10,
+                (-state.paddle1.y + 1) * scale - 20,
+                10,
+                40
+            );
+
+            ctx.fillStyle = "blue";
+            ctx.fillRect(
+                (state.paddle2.x + 1) * scale + canvas.width / 2 - 10,
+                (-state.paddle2.y + 1) * scale - 20,
+                10,
+                40
+            );
+        }
+    </script>
+</body>
+</html>
