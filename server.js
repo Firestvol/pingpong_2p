@@ -1,5 +1,4 @@
 const { Server } = require("colyseus");
-const WebSocketTransport = require("@colyseus/transport").WebSocketTransport;
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
@@ -30,16 +29,11 @@ app.post("/api/create-room", (req, res) => {
 // Создаем HTTP-сервер
 const httpServer = http.createServer(app);
 
-// Создаем WebSocketTransport
-const transport = new WebSocketTransport({
-    server: httpServer,
-    pingInterval: 10000,
-    pingMaxRetries: 2
-});
-
 // Создаем Colyseus-сервер
 const gameServer = new Server({
-    transport
+    transport: {
+        server: httpServer
+    }
 });
 
 // Определение комнаты
