@@ -2,6 +2,27 @@ const { Server, Room } = require("colyseus");
 const express = require("express");
 const http = require("http");
 
+// Создаем Express-приложение
+const app = express();
+app.use(express.json());
+app.use(express.static("public")); // Для обслуживания статических файлов
+
+// Коллекция комнат
+let rooms = [];
+
+// API для получения списка комнат
+app.get("/api/rooms", (req, res) => {
+    res.json(rooms.map(room => ({ id: room.id, players: room.clients.length })));
+});
+
+// API для создания новой комнаты
+app.post("/api/create-room", (req, res) => {
+    const newRoom = gameServer.createRoom("pong");
+    rooms.push(newRoom);
+    res.json({ roomId: newRoom.id });
+});
+
+// Коллбэк при создании комнаты
 class PongRoom extends Room {
     onCreate(options) {
         this.setState({
@@ -12,14 +33,19 @@ class PongRoom extends Room {
         });
 
         this.setSimulationInterval(() => this.updateGame(), 16);
+
+        // Удаляем комнату из списка, если она закрыта
+        this.onDispose = () => {
+            rooms = rooms.filter(r => r.id !== this.id);
+        };
     }
 
     onJoin(client, options) {
-        console.log(`Client ${client.sessionId} joined.`);
+        console.log(`Client ${client.sessionId} joined room ${this.id}`);
     }
 
     onLeave(client) {
-        console.log(`Client ${client.sessionId} left.`);
+        console.log(`Client ${client.sessionId} left room ${this.id}`);
     }
 
     onMessage(client, message) {
@@ -75,13 +101,12 @@ class PongRoom extends Room {
     }
 }
 
-const app = express();
-const server = http.createServer(app);
-const gameServer = new Server({ server });
-
+// Создаем Colyseus-сервер
+const gameServer = new Server({ server: http.createServer(app) });
 gameServer.define("pong", PongRoom);
 
+// Запускаем сервер
 const PORT = process.env.PORT || 2567;
-server.listen(PORT, () => {
+gameServer.listen(PORT, () => {
     console.log(`Colyseus server running on port ${PORT}`);
 });
