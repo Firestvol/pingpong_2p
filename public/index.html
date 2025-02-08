@@ -26,6 +26,22 @@
             padding: 10px;
             background-color: #ddd;
             border-radius: 5px;
+            cursor: pointer;
+        }
+        li:hover {
+            background-color: #ccc;
+        }
+        #game {
+            display: none;
+        }
+        canvas {
+            border: 1px solid black;
+            margin-top: 20px;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #333;
         }
     </style>
 </head>
@@ -48,6 +64,7 @@
     <!-- Игровое поле -->
     <div id="game" style="display: none;">
         <canvas id="pongCanvas" width="600" height="400"></canvas>
+        <div id="status">Ожидание второго игрока...</div>
     </div>
 
     <script src="https://cdn.colyseus.io/client/latest/colyseus.js"></script>
@@ -65,7 +82,10 @@
             fetch("/api/rooms")
                 .then(res => res.json())
                 .then(data => renderRooms(data))
-                .catch(err => console.error(err));
+                .catch(err => {
+                    console.error(err);
+                    alert("Не удалось получить список комнат.");
+                });
 
             document.getElementById("auth-form").style.display = "none";
             document.getElementById("room-list").style.display = "block";
@@ -86,24 +106,40 @@
 
         // Создание новой комнаты
         async function createRoom() {
-            const res = await fetch("/api/create-room", { method: "POST" });
-            const data = await res.json();
-            joinRoom(data.roomId);
+            try {
+                const res = await fetch("/api/create-room", { method: "POST" });
+                const data = await res.json();
+                joinRoom(data.roomId);
+            } catch (e) {
+                console.error(e);
+                alert("Не удалось создать комнату.");
+            }
         }
 
         // Присоединение к комнате
         async function joinRoom(roomId) {
             try {
-                client = new colyseus.Client("wss://pingpong2p-production.up.railway.app");
+                client = new colyseus.Client("wss://pingpong2p-production.up.railway.app/");
                 room = await client.joinById(roomId);
 
                 document.getElementById("room-list").style.display = "none";
                 document.getElementById("game").style.display = "block";
 
                 room.onStateChange.once((state) => startGame(state));
+                room.onMessage("error", (error) => {
+                    alert(error.message);
+                    document.getElementById("game").style.display = "none";
+                    document.getElementById("room-list").style.display = "block";
+                });
+
+                room.onLeave(() => {
+                    alert("Вы были отключены от игры.");
+                    document.getElementById("game").style.display = "none";
+                    document.getElementById("room-list").style.display = "block";
+                });
             } catch (e) {
-                alert("Не удалось присоединиться к комнате.");
                 console.error(e);
+                alert("Не удалось присоединиться к комнате.");
             }
         }
 
@@ -111,6 +147,13 @@
         function startGame(state) {
             const canvas = document.getElementById("pongCanvas");
             const ctx = canvas.getContext("2d");
+            const statusDiv = document.getElementById("status");
+
+            if (room.clients.length === 1) {
+                statusDiv.textContent = "Ожидание второго игрока...";
+            } else {
+                statusDiv.textContent = "Игра началась!";
+            }
 
             setInterval(() => {
                 draw(state);
@@ -119,6 +162,12 @@
             window.addEventListener("mousemove", (e) => {
                 const mouseY = (e.clientY / window.innerHeight) * 2 - 1;
                 room.send({ type: "move", y: mouseY });
+            });
+
+            room.onStateChange((updatedState) => {
+                if (updatedState.score.player1 + updatedState.score.player2 > 0) {
+                    statusDiv.textContent = `Счет: ${updatedState.score.player1} : ${updatedState.score.player2}`;
+                }
             });
         }
 
@@ -129,6 +178,7 @@
             const ctx = canvas.getContext("2d");
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // Мячик
             ctx.fillStyle = "white";
             ctx.beginPath();
             ctx.arc(
@@ -140,6 +190,7 @@
             );
             ctx.fill();
 
+            // Ракетка 1
             ctx.fillStyle = "red";
             ctx.fillRect(
                 (state.paddle1.x + 1) * scale + canvas.width / 2 - 10,
@@ -148,6 +199,7 @@
                 40
             );
 
+            // Ракетка 2
             ctx.fillStyle = "blue";
             ctx.fillRect(
                 (state.paddle2.x + 1) * scale + canvas.width / 2 - 10,
