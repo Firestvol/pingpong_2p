@@ -1,0 +1,12 @@
+﻿{
+  "name": "pong-game",
+  "version": "1.0.0",
+  "dependencies": {
+    "colyseus": "^0.14.3",  // Colyseus как зависимость
+    "express": "^4.17.1",
+    "ws": "^8.5.0"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
